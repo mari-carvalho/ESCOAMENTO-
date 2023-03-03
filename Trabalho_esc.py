@@ -1,77 +1,51 @@
-# Fase óleo
-
+#------------------------Fase óleo------------------------#
+import np as np
 import numpy as np
 import math as mt
 
 # Ponto de Bolha
 do = rho_o/rho_w
 API = 141.5/do - 131.5
-if API <= 30:
-    c1_pb = 27.624
-    c2_pb = 0.914328
-    c3_pb = 11.172
-elif API > 30:
-        c1_pb = 56.18
-        c2_pb = 0.84246
-        c3_pb = 10.393
 
-dg = rho_gas/rho_ar      # em 101.325kPa e 15Celsius Par = 1.225kg/m³
-dgn = dg*(1 + (5.912*(10**-5))*API*Tsep*np.log(Psep/114.7))       # Tsep em F
-a = -c3_pb*API/T       # temperatura em Rankine
+dg = rho_gas/rho_ar   # em 101.325kPa e 15Celsius Par = 1.225kg/m³
+#dgn = dg*(1 + (5.912*(10**-5))*API*Tsep*np.log(Psep/114.7))       # Tsep em F
+
+a_pb = (7.916*10**-4)*(API**1.5410)-(4.561*10**-5)*(T**1.3911)   # T em F
 
 # Razão de Solubilidade gás-óleo
-# P < Pb
-if API <= 30:
-    c1_rs = 0.0362
-    c2_rs = 1.0937
-    c2_rs = 25.7240
-elif API > 30:
-    c1_rs = 0.0178
-    c2_rs = 1.1870
-    c3_rs = 23.931
+# P <= Pb
+a_rs = (7.916*10**-4)*(API**1.541)+(-4.561*10**-5)*(T**1.3911)   # T em F
+rs = (((P/112.727)+12.34)*(dg**0.8439)*(10**a_rs))**1.73184   # P em psia e T em F
 
-rs = (c1_rs*dgn*(P)**c2_rs)*np.exp(c2_rs*API/T)   # P em psia e T em Rankine
-
-pb = ((c1_pb*rs/dgn)*10**a)**c2_pb
+pb = ((112.727*(rs**0.577421))/((dg**0.8439)*10**a_pb)) - 1391.051   # T em F
 
 # Fator Volume-Formação
 # P < Pb
-if API <= 30:
-    c1_bo = 4.677*10**-4
-    c2_bo = 1.751*10**-5
-    c2_bo = -1.811*10**-8
-elif API > 30:
-    c1_bo = 4.670*10**-4
-    c2_bo = 1.100*10**-5
-    c3_bo = 1.337*10**-9
-
-bo = 1 + c1_bo*rs + (T-520)*(API/dgn)*(c2_bo+c3_bo*rs)   # T em Rankine
+bo = 1.0113+(7.2046*10**-5)*((rs**0.3738)*(dg**0.2914/do**0.6265)+0.24626*(T**0.5371))**3.0936)   # T em F
 
 # Massa Específica do Óleo
 
 # Compressibilidade Isotérmica do Óleo
 # P >= Pb
-co = (-1433 + 5*rsb + 17.2*T - 1180*dgn + 12.61*API)/(P*10**5)   # T em F
+co = 1.705*(10**-7)*(rs**0.69357)*(dg**0.1885)*(API**0.3272)*(T**0.6729)*(P**-0.5906)   # T em F
 
 # Viscosidade do Óleo Morto
-a_uod = 10**(3.0324-0.02023*API)
+a_uod = 10**(0.43+8.33/API)
 
-uod = (10**(a_uod*(T)**-1.163)) -1   # T em F
+uod = 0.32+(1.8*10**7/API**4.53)*((360/T-260)**a_uod)   # T em Rankine
 
 # Viscosidade do Óleo Saturado
 # P <= Pb
-a_uob = 10.715*(rs+100)**-0.515
-b_uob = 5.44*(rs+150)**-0.338
+a_uob = 10**(-7.4*10**-4*rs+2.2*10**-7*rs**2)
+b_uob = 0.68/(10**8.62*10**-5*rs) + 0.25/(10**1.1*10**-3*rs) + 0.062/(10**3.74*10**-3*rs)
 
-uob = a*uod**b
+uob = a_uob*uod**b_uob
 
 # Viscosidade do Óleo Sub-Saturado
-m_uo = 2.6*P**1.187*np.exp(-11.513-(8.98*10**-5)*P)
-
-uo = uob*(P/Pb)**m_uo
+uo = uob+(0.001*(P-Pb))*(0.024*(uob**1.6)+0.038*(uob**0.56))
 
 
-# Fase Gás
+#------------------------Fase Gás------------------------#
 
 # Fator de Compressibilidade Isotérmico
 a_z = 1.39*((Tpr-0.92)**1/2)-0.36*Tpr-0.101
@@ -84,3 +58,19 @@ z = a_z+((1-a_z)/(2.71**b_z))+c_z*Ppr**d_z   # euler ???
 # Massa Específica do Gás
 rho_g = P*Mg/(z*R*T)    # T em K
 
+# Viscosidade do Gás
+x_ug = 3.47+(1588/T)+0.0009*Mg   # T em Rankine
+y_ug = 1.66378-0.04679*x_ug
+a_ug = x_ug*rho_g**y_ug
+k_ug = (0.807*(Tpr**0.618)-0.357*np.exp(-0.449*Tpr)+0.34*np.exp(-4.058*Tpr)+0.018)/(0.9490*(Tpc/((Mg**3)*(Ppc**4)))**1/6))   # T em Rankine
+
+ug = 10**-4*k_ug*np.exp(a_ug)
+
+# Fator Volume Formação
+bg = Psc/Tsc*(z*T/P)   # Psc = 14.7 psia e Tsc = 60 F
+
+# Compressibilidade Isotérmica
+cg = 1/P-1/Z*(dz/dp)
+
+
+#------------------------Fase Água------------------------#
